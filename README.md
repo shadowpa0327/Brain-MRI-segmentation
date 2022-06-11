@@ -6,6 +6,15 @@ To install the required package run the command below.
 pip install -r requirements.txt
 ```
 
+## Dataset
+
+To prepare dataset you can use the `kaggle-api` to get the zip flie.
+```
+kaggle datasets download -d mateuszbuda/lgg-mri-segmentation
+```
+Note that if some error like command not found occur, you may need to install the `kaggle` module first. 
+
+Or you can also download the data manually at official [kaggle website](https://www.kaggle.com/datasets/mateuszbuda/lgg-mri-segmentation).
 
 ## Usage
 To run the model with `Unet` and `resnet50` encoder run the command below
@@ -54,3 +63,8 @@ config=[
         '--eval'
     ]
 ```
+
+## To Do
++ Add the option of learning rate scheduler
++ Add model Swin-Unet
++ Add ploting script for result visualization
