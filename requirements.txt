@@ -1,0 +1,8 @@
+segmentation_models_pytorch
+torch==1.11.0
+torchvision==0.12.0
+Pillow
+numpy
+scikit-learn
+albumentations
+opencv-python
