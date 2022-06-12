@@ -19,6 +19,8 @@ from model import build_model
 from dataset import *
 from metric import *
 
+from timm.scheduler import create_scheduler
+
 
 
 def get_args_parser():
@@ -39,11 +41,35 @@ def get_args_parser():
                     help='start epoch') # currently is not used
     parser.add_argument('--opt', default='adamw', type=str, metavar='OPTIMIZER',
                         help='Optimizer (default: "adamw"')
-    parser.add_argument('--lr', type=float, default=5e-4, metavar='LR',
-                        help='learning rate (default: 5e-4)')
     parser.add_argument('--weight-decay', type=float, default=0.05,
                         help='weight decay (default: 0.05)')
-    # Todo add learning rate scheduler
+
+    # Learning rate schedule parameters
+    parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER',
+                        help='LR scheduler (default: "cosine"')
+    parser.add_argument('--lr', type=float, default=5e-4, metavar='LR',
+                        help='learning rate (default: 5e-4)')
+    parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct',
+                        help='learning rate noise on/off epoch percentages')
+    parser.add_argument('--lr-noise-pct', type=float, default=0.67, metavar='PERCENT',
+                        help='learning rate noise limit percent (default: 0.67)')
+    parser.add_argument('--lr-noise-std', type=float, default=1.0, metavar='STDDEV',
+                        help='learning rate noise std-dev (default: 1.0)')
+    parser.add_argument('--warmup-lr', type=float, default=1e-6, metavar='LR',
+                        help='warmup learning rate (default: 1e-6)')
+    parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR',
+                        help='lower lr bound for cyclic schedulers that hit 0 (1e-5)')
+
+    parser.add_argument('--decay-epochs', type=float, default=30, metavar='N',
+                        help='epoch interval to decay LR')
+    parser.add_argument('--warmup-epochs', type=int, default=5, metavar='N',
+                        help='epochs to warmup LR, if scheduler supports')
+    parser.add_argument('--cooldown-epochs', type=int, default=10, metavar='N',
+                        help='epochs to cooldown LR at min_lr, after cyclic schedule ends')
+    parser.add_argument('--patience-epochs', type=int, default=10, metavar='N',
+                        help='patience epochs for Plateau LR scheduler (default: 10')
+    parser.add_argument('--decay-rate', '--dr', type=float, default=0.1, metavar='RATE',
+                        help='LR decay rate (default: 0.1)')
     
 
     # model choice
@@ -90,7 +116,7 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
             optimizer.step()
 
         val_mean_dice = compute_dice(model, val_loader, device=device)
-        scheduler.step(val_mean_dice)
+        scheduler.step(epoch)
         loss_history.append(np.array(losses).mean())
         train_history.append(np.array(train_iou).mean())
         val_history.append(val_mean_dice)
@@ -103,7 +129,9 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
             torch.save({
                     'model': model.state_dict(),
                     'args' : args,
-                    'epoch' : epoch
+                    'epoch' : epoch,
+                    'optimizer': optimizer.state_dict(),
+                    'lr_scheduler': scheduler.state_dict(),
                 }, checkpoint_paths
             )
 
@@ -113,19 +141,22 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
                 torch.save({
                         'model': model.state_dict(),
                         'args' : args,
-                        'epoch' : epoch
+                        'epoch' : epoch,
+                        'optimizer': optimizer.state_dict(),
+                        'lr_scheduler': scheduler.state_dict(),
                     }, checkpoint_paths
                 )
             
             best_dice_coef = val_mean_dice
 
-        print('Epoch : {}/{} loss: {:.3f} - dice_coef: {:.3f} - val_dice_coef: {:.3f} - best_dice_coef {:.3f}'.format(
+        lr = optimizer.param_groups[0]["lr"]
+        print('Epoch : {}/{} loss: {:.3f} - dice_coef: {:.3f} - val_dice_coef: {:.3f} - best_dice_coef {:.3f} - lr {:.6f}'.format(
                                                                                 epoch+1, args.epochs,np.array(losses).mean(),
                                                                                np.array(train_iou).mean(),
-                                                                               val_mean_dice, best_dice_coef))
+                                                                               val_mean_dice, best_dice_coef, lr))
         if args.output_dir:
             with (output_dir / "log.txt").open("a") as f:
-                f.write(f"Epoch:{epoch} | Train_DICE:{train_history[-1]:.3f} | Val_DICE{val_history[-1]:.3f} | Best_DICE:{best_dice_coef:.3f}\n")
+                f.write(f"Epoch:{epoch} | Train_DICE:{train_history[-1]:.3f} | Val_DICE{val_history[-1]:.3f} | Best_DICE:{best_dice_coef:.3f} | lr:{lr:.6f}")
     return loss_history, train_history, val_history
 
 
@@ -157,7 +188,10 @@ def main(args):
         print(f"load from checkpoint:{args.resume}")
         checkpoint = torch.load(args.resume, map_location='cpu')
         model.load_state_dict(checkpoint['model'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
         args.start_epoch = checkpoint['epoch'] + 1
+        lr_scheduler.step(args.start_epoch)
 
     if args.eval:
          # testing
@@ -170,12 +204,13 @@ def main(args):
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay = args.weight_decay)
     if args.opt == 'adam':
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay = args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=3)
+
+    lr_scheduler, _ = create_scheduler(args, optimizer)
     # training
     num_epochs = args.epochs
     loss_history, train_history, val_history = train_model(args = args, model = model, train_loader = train_dataloader, 
                                                             val_loader = val_dataloader, loss_func = bce_dice_loss, 
-                                                            optimizer = optimizer, scheduler = scheduler, 
+                                                            optimizer = optimizer, scheduler = lr_scheduler, 
                                                         )
     
     # testing

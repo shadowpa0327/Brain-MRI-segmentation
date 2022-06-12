@@ -1,5 +1,11 @@
 # Brain-MRI-segmentation
 
+## Update 0613 -- Add Learning Rate Scheduler
+The learning rate scheduler create from `timm` is add. 
+Currently, the default scheduler is `consine`.  All of the scheduler that is supported in timm is also supported here.
+For detailed and which scheduler can be use, go to [this site](https://timm.fast.ai/schedulers) for more information.
+
+
 ## Install reuqired package
 To install the required package run the command below.
 ```
