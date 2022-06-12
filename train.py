@@ -95,10 +95,7 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
         train_history.append(np.array(train_iou).mean())
         val_history.append(val_mean_dice)
 
-        print('Epoch : {}/{} loss: {:.3f} - dice_coef: {:.3f} - val_dice_coef: {:.3f}'.format(
-                                                                                epoch+1, args.epochs,np.array(losses).mean(),
-                                                                               np.array(train_iou).mean(),
-                                                                               val_mean_dice))
+        
 
 
         if args.output_dir:
@@ -122,9 +119,13 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
             
             best_dice_coef = val_mean_dice
 
+        print('Epoch : {}/{} loss: {:.3f} - dice_coef: {:.3f} - val_dice_coef: {:.3f} - best_dice_coef {:.3f}'.format(
+                                                                                epoch+1, args.epochs,np.array(losses).mean(),
+                                                                               np.array(train_iou).mean(),
+                                                                               val_mean_dice, best_dice_coef))
         if args.output_dir:
             with (output_dir / "log.txt").open("a") as f:
-                f.write(f"Epoch:{epoch}/{args.epochs} | Train_DICE:{train_history[-1]:.3f} | Val_DICE{val_history[-1]:.3f}\n")
+                f.write(f"Epoch:{epoch} | Train_DICE:{train_history[-1]:.3f} | Val_DICE{val_history[-1]:.3f} | Best_DICE:{best_dice_coef:.3f}\n")
     return loss_history, train_history, val_history
 
 
@@ -179,7 +180,7 @@ def main(args):
     
     # testing
     test_iou = compute_dice(model, test_dataloader)
-    print("Mean IoU: {:.3f}%".format(100*test_iou))
+    print("Mean dice coef: {:.3f}%".format(100*test_iou))
 
 
 
@@ -188,10 +189,12 @@ if __name__ == '__main__':
     config=[
         '--data-path', '../lgg-mri-segmentation/kaggle_3m/',
         '--epochs' , '100',
-        '--output_dir', 'Unet',
+        '--output_dir', 'Unet++',
         '--lr', '1e-4',
-        '--weight-decay','0.05',
-        '--resume', 'Unet/checkpoint.pth',
+        '--weight-decay','0.01',
+        '--seg_struct', 'Unet++',
+        '--encoder', 'timm-efficientnet-b5'
+        #'--resume', 'Unet/checkpoint.pth',
     ]
     parser = argparse.ArgumentParser('DLP_Final', parents=[get_args_parser()])
     args = parser.parse_args(args=config)

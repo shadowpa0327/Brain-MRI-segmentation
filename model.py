@@ -100,6 +100,7 @@ def build_model(seg_struct = 'Unet', encoder = 'resnet50', decoder_channels = No
         if seg_struct == 'Unet':
             if not isinstance(decoder_channels, list):
                 raise ValueError("decoder channel of Unet should be a list")
+            print(f"Build Unet with encoder {encoder}")
             if encoder == 'Unet': # using Unet original structure
                 model = Unet(in_channels=3, out_channels=1)
             else : # change Unet encoder
@@ -113,6 +114,7 @@ def build_model(seg_struct = 'Unet', encoder = 'resnet50', decoder_channels = No
         elif seg_struct == 'Unet++':
             if not isinstance(decoder_channels, list):
                 raise ValueError("decoder channel of Unet++ should be a list")
+            print(f"Build Unet++ with encoder {encoder}")
             model = smp.UnetPlusPlus(encoder,in_channels=3, 
                                     encoder_weights='imagenet',
                                             classes=1, 
