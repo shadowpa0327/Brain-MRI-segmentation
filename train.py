@@ -20,7 +20,7 @@ from dataset import *
 from metric import *
 
 from timm.scheduler import create_scheduler
-
+from torchsummary import summary
 
 
 def get_args_parser():
@@ -59,7 +59,6 @@ def get_args_parser():
                         help='warmup learning rate (default: 1e-6)')
     parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0 (1e-5)')
-
     parser.add_argument('--decay-epochs', type=float, default=30, metavar='N',
                         help='epoch interval to decay LR')
     parser.add_argument('--warmup-epochs', type=int, default=5, metavar='N',
@@ -150,13 +149,13 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
             best_dice_coef = val_mean_dice
 
         lr = optimizer.param_groups[0]["lr"]
-        print('Epoch : {}/{} loss: {:.3f} - dice_coef: {:.3f} - val_dice_coef: {:.3f} - best_dice_coef {:.3f} - lr {:.6f}'.format(
+        print('Epoch : {}/{} loss: {:.3f} - dice_coef: {:.3f} - val_dice_coef: {:.3f} - best_dice_coef {:.3f} - lr {:.7f}'.format(
                                                                                 epoch+1, args.epochs,np.array(losses).mean(),
                                                                                np.array(train_iou).mean(),
                                                                                val_mean_dice, best_dice_coef, lr))
         if args.output_dir:
             with (output_dir / "log.txt").open("a") as f:
-                f.write(f"Epoch:{epoch} | Train_DICE:{train_history[-1]:.3f} | Val_DICE{val_history[-1]:.3f} | Best_DICE:{best_dice_coef:.3f} | lr:{lr:.6f}")
+                f.write(f"Epoch:{epoch} | Train_DICE:{train_history[-1]:.3f} | Val_DICE{val_history[-1]:.3f} | Best_DICE:{best_dice_coef:.3f} | lr:{lr:.7f}\n")
     return loss_history, train_history, val_history
 
 
@@ -169,7 +168,7 @@ def main(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Data Reading
-    train_df, val_df, test_df = read_data_to_DataFrame(args.data_path) # read file into pd.Dataframe
+    train_df, val_df, test_df = read_data_from_csv(args.data_path) # read file into pd.Dataframe
     train_dataset, val_dataset, test_dataset = build_dataset(train_df, val_df, test_df) # convert it the dataset
 
     # build Dataloader
@@ -183,7 +182,7 @@ def main(args):
                   decoder_channels = [256, 128, 64, 32, 16])
 
     model = model.to(device)
-
+    summary(model, (3, 256, 256))
     if args.resume:
         print(f"load from checkpoint:{args.resume}")
         checkpoint = torch.load(args.resume, map_location='cpu')
@@ -222,14 +221,13 @@ def main(args):
 
 if __name__ == '__main__':
     config=[
-        '--data-path', '../lgg-mri-segmentation/kaggle_3m/',
+        '--data-path', './data',
         '--epochs' , '100',
-        '--output_dir', 'Unet++',
+        '--output_dir', 'Unet',
         '--lr', '1e-4',
         '--weight-decay','0.01',
-        '--seg_struct', 'Unet++',
-        '--encoder', 'timm-efficientnet-b5'
-        #'--resume', 'Unet/checkpoint.pth',
+        '--seg_struct', 'Unet',
+        '--encoder', 'resnet18',
     ]
     parser = argparse.ArgumentParser('DLP_Final', parents=[get_args_parser()])
     args = parser.parse_args(args=config)

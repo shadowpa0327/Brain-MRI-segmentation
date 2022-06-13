@@ -24,15 +24,25 @@ def read_data_to_DataFrame(ROOT_PATH=None):
     df = pd.DataFrame({"image_path": image_files,
                   "mask_path": mask_files,
                   "diagnosis": [diagnosis(x) for x in mask_files]})
-    train_df, val_df = train_test_split(df, stratify=df['diagnosis'], test_size=0.1)
+
+    train_df, test_df = train_test_split(df, stratify=df['diagnosis'], test_size=0.1)
+    train_df = train_df.reset_index(drop=True)
+    test_df = test_df.reset_index(drop=True)
+
+    train_df, val_df = train_test_split(train_df, stratify=train_df['diagnosis'], test_size=0.15)
     train_df = train_df.reset_index(drop=True)
     val_df = val_df.reset_index(drop=True)
 
-    train_df, test_df = train_test_split(train_df, stratify=train_df['diagnosis'], test_size=0.15)
-    train_df = train_df.reset_index(drop=True)
+    
     
     return train_df, val_df, test_df
 
+
+def read_data_from_csv(ROOT_PATH=None):
+    train_df = pd.read_csv(os.path.join(ROOT_PATH, "train.csv"))
+    val_df = pd.read_csv(os.path.join(ROOT_PATH, "val.csv"))
+    test_df = pd.read_csv(os.path.join(ROOT_PATH, "test.csv"))
+    return train_df, val_df, test_df
 
 def build_transform(mode='train'):
     if mode == 'train':
