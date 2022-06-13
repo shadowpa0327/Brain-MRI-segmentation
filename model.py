@@ -61,9 +61,9 @@ class OutConv(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
-class UNet(nn.Module):
+class Unet(nn.Module):
     def __init__(self, n_channels, n_classes, bilinear=True):
-        super(UNet, self).__init__()
+        super(Unet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
         self.bilinear = bilinear
@@ -102,7 +102,7 @@ def build_model(seg_struct = 'Unet', encoder = 'resnet50', decoder_channels = No
                 raise ValueError("decoder channel of Unet should be a list")
             print(f"Build Unet with encoder {encoder}")
             if encoder == 'Unet': # using Unet original structure
-                model = Unet(in_channels=3, out_channels=1)
+                model = Unet(n_channels=3,n_classes=1)
             else : # change Unet encoder
                 model = smp.Unet(encoder,in_channels=3, 
                                         encoder_weights='imagenet',
@@ -121,6 +121,15 @@ def build_model(seg_struct = 'Unet', encoder = 'resnet50', decoder_channels = No
                                         activation='sigmoid', 
                                     encoder_depth=5, 
                                 decoder_channels=decoder_channels)
+        elif seg_struct == 'DeepLabV3':
+            if not isinstance(decoder_channels, list):
+                raise ValueError("decoder channel of Unet++ should be a list")
+            print(f"Build Unet++ with encoder {encoder}")
+            model = smp.UnetPlusPlus(encoder,in_channels=3, 
+                                    encoder_weights='imagenet',
+                                            classes=1, 
+                                        activation='sigmoid', 
+                                    encoder_depth=5)
         else : 
             raise ValueError(f"Illegal segmentation structure name {seg_struct}")
         return model
