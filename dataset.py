@@ -25,7 +25,7 @@ def read_data_to_DataFrame(ROOT_PATH=None):
                   "mask_path": mask_files,
                   "diagnosis": [diagnosis(x) for x in mask_files]})
 
-    train_df, test_df = train_test_split(df, stratify=df['diagnosis'], test_size=0.1)
+    train_df, test_df = train_test_split(df, stratify=df['diagnosis'], test_size=0.2)
     train_df = train_df.reset_index(drop=True)
     test_df = test_df.reset_index(drop=True)
 
@@ -47,7 +47,7 @@ def read_data_from_csv(ROOT_PATH=None):
 def build_transform(mode='train'):
     if mode == 'train':
         train_transform = A.Compose([
-            A.Resize(width=128, height=128, p=1.0),
+            A.Resize(width=224, height=224, p=1.0),
             A.HorizontalFlip(p=0.5),
             A.VerticalFlip(p=0.5),
             A.RandomRotate90(p=0.5),
@@ -56,13 +56,13 @@ def build_transform(mode='train'):
         return train_transform
     if mode == 'val':
         val_transform = A.Compose([
-            A.Resize(width=128, height=128, p=1.0),
+            A.Resize(width=224, height=224, p=1.0),
             A.HorizontalFlip(p=0.5),
         ])
         return val_transform
     if mode == 'test':
         test_transform = A.Compose([
-            A.Resize(width=128, height=128, p=1.0)
+            A.Resize(width=224, height=224, p=1.0)
         ])
         return test_transform
 
