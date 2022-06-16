@@ -33,6 +33,7 @@ def get_args_parser():
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
+    parser.add_argument('--cfg', type=str, required=True, metavar="FILE", help='path to config file', )
     parser.add_argument('--resume', default='', help='resume from checkpoint')
     parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
     # training setting
@@ -77,6 +78,18 @@ def get_args_parser():
                         help="The encoder to be use in the segmentation model check model.py for detailed")
     parser.add_argument('--is-swin', action='store_true')
     parser.set_defaults(is_swin=False)
+    # TransUnet
+    parser.add_argument('--is-tran', action='store_true')
+    parser.set_defaults(is_swin=False)
+    parser.add_argument('--n_skip', type=int,
+                    default=3, help='using number of skip-connect, default is num')
+    parser.add_argument('--vit_name', type=str,
+                        default='R50-ViT-B_16', help='select one vit model')
+    parser.add_argument('--vit_patches_size', type=int,
+                        default=16, help='vit_patches_size, default is 16')
+    parser.add_argument('--img_size', type=int,
+                    default=224, help='input patch size of network input')
+    parser.add_argument('--TransUnet-pretrained-path')
 
     return parser
 
@@ -100,13 +113,14 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
         for i, (image, mask) in enumerate(train_loader):
             image = image.to(device)
             mask = mask.to(device)
+            #with torch.cuda.amp.autocast():
             outputs = model(image)
+            loss = loss_func(outputs, mask)
             out_cut = np.copy(outputs.data.cpu().numpy())
+            #out_cut = sigmoid(out_cut)
             out_cut[np.nonzero(out_cut < 0.5)] = 0.0
             out_cut[np.nonzero(out_cut >= 0.5)] = 1.0            
-
             train_dice = dice_coef_metric(out_cut, mask.data.cpu().numpy())
-            loss = loss_func(outputs, mask)
             losses.append(loss.item())
             train_iou.append(train_dice)
             
@@ -155,7 +169,7 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
                                                                                val_mean_dice, best_dice_coef, lr))
         if args.output_dir:
             with (output_dir / "log.txt").open("a") as f:
-                f.write(f"Epoch:{epoch} | Train_DICE:{train_history[-1]:.3f} | Val_DICE{val_history[-1]:.3f} | Best_DICE:{best_dice_coef:.3f} | lr:{lr:.7f}\n")
+                f.write(f"Epoch:{epoch} | Train_DICE:{train_history[-1]:.3f} | Val_DICE:{val_history[-1]:.3f} | Best_DICE:{best_dice_coef:.3f} | lr:{lr:.7f}\n")
     return loss_history, train_history, val_history
 
 
@@ -172,17 +186,34 @@ def main(args):
     train_dataset, val_dataset, test_dataset = build_dataset(train_df, val_df, test_df) # convert it the dataset
 
     # build Dataloader
-    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=26, shuffle=True, num_workers=2)
-    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=26, shuffle=True, num_workers=2)
-    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=26, shuffle=False, num_workers=2)
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=24, shuffle=True, num_workers=8, pin_memory=True)
+    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=24, shuffle=True, num_workers=8, pin_memory=True)
+
 
     # build model
     model = build_model(seg_struct = args.seg_struct, 
                            encoder = args.encoder, 
-                  decoder_channels = [256, 128, 64, 32, 16])
+                  decoder_channels = [256, 128, 64, 32, 16],
+                        is_swin    =  args.is_swin,
+                        is_tran    = args.is_tran,
+                        args       = args
+                )
 
     model = model.to(device)
-    summary(model, (3, 256, 256))
+
+    # optimizer and scheduler 
+    if args.opt == 'adamw':
+        optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay = args.weight_decay)
+    if args.opt == 'adam':
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay = args.weight_decay)
+
+    lr_scheduler, _ = create_scheduler(args, optimizer)
+
+
+    print(model)
+    #summary(model, (3, 224, 224))
+
+
     if args.resume:
         print(f"load from checkpoint:{args.resume}")
         checkpoint = torch.load(args.resume, map_location='cpu')
@@ -194,17 +225,10 @@ def main(args):
 
     if args.eval:
          # testing
+        test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=24, shuffle=False, num_workers=2)
         test_iou = compute_dice(model, test_dataloader)
         print("Mean IoU: {:.3f}%".format(100*test_iou))
         return
-
-    # optimizer and scheduler 
-    if args.opt == 'adamw':
-        optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay = args.weight_decay)
-    if args.opt == 'adam':
-        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay = args.weight_decay)
-
-    lr_scheduler, _ = create_scheduler(args, optimizer)
     # training
     num_epochs = args.epochs
     loss_history, train_history, val_history = train_model(args = args, model = model, train_loader = train_dataloader, 
@@ -213,8 +237,9 @@ def main(args):
                                                         )
     
     # testing
-    test_iou = compute_dice(model, test_dataloader)
-    print("Mean dice coef: {:.3f}%".format(100*test_iou))
+
+    #test_iou = compute_dice(model, test_dataloader)
+    #print("Mean dice coef: {:.3f}%".format(100*test_iou))
 
 
 
@@ -223,11 +248,17 @@ if __name__ == '__main__':
     config=[
         '--data-path', './data',
         '--epochs' , '100',
-        '--output_dir', 'Unet',
+        '--output_dir', 'Unet_efficient_net',
         '--lr', '1e-4',
+        '--min-lr', '1e-6',
         '--weight-decay','0.01',
         '--seg_struct', 'Unet',
-        '--encoder', 'resnet18',
+        '--encoder', 'timm-efficientnet-b6',
+        #'--is-tran',
+        #'--resume', 'TranUnet/checkpoint.pth',
+        #'--eval',
+        '--TransUnet-pretrained-path', './pretrained_ckpt/R50+ViT-B_16.npz',
+        '--cfg', './configs/swin_tiny_patch4_window7_224_lite.yaml'
     ]
     parser = argparse.ArgumentParser('DLP_Final', parents=[get_args_parser()])
     args = parser.parse_args(args=config)
