@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from engine import mIoU
-
+import segmentation_models_pytorch as smp
 
 def dice_coef_metric(pred, label):
     intersection = 2.0 * (pred * label).sum()
@@ -25,12 +25,13 @@ def bce_dice_loss(pred, label):
 def iou_metric(y_pred, y_true):
     intersec = (y_true * y_pred).sum()
     union = (y_true + y_pred).sum()
-    iou = (intersec + 0.1) / (union- intersec + 0.1)
+    iou = (intersec + 1e-10) / (union- intersec + 1e-10)
     return iou
 
 def compute_dice(model, loader, threshold=0.3, device = 'cuda'):
     model.eval()
     valdice = 0
+    valIoU = 0
     with torch.no_grad():
         for step, (data, target) in enumerate(loader, 1):
             data = data.to(device)
@@ -42,9 +43,13 @@ def compute_dice(model, loader, threshold=0.3, device = 'cuda'):
             out_cut[np.nonzero(out_cut >= threshold)] = 1.0
 
             dice = dice_coef_metric(out_cut, target.data.cpu().numpy())
-            valdice += dice
+            IoU = iou_metric(out_cut, target.data.cpu().numpy())
+            #tp, fp, fn, tn = smp.metrics.get_stats(outputs, target, mode='binary', threshold=threshold)
 
-    return valdice / step
+            valdice += dice
+            valIoU += IoU
+
+    return valdice / step, valIoU / step
 
 """
 Returns a tuple:

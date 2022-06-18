@@ -117,8 +117,8 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
         model.train()
 
         losses = []
-        train_iou = []
-
+        train_ious = []
+        train_dices = []
         for i, (image, mask) in enumerate(train_loader):
             image = image.to(device)
             mask = mask.to(device)
@@ -129,7 +129,8 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
                 out_cut = np.copy(outputs.data.cpu().numpy())
                 #out_cut = sigmoid(out_cut)
                 out_cut[np.nonzero(out_cut < 0.5)] = 0.0
-                out_cut[np.nonzero(out_cut >= 0.5)] = 1.0            
+                out_cut[np.nonzero(out_cut >= 0.5)] = 1.0 
+                train_IoU = iou_metric(out_cut, mask.data.cpu().numpy())           
                 train_dice = dice_coef_metric(out_cut, mask.data.cpu().numpy())
             else:
                 mIoU = eval_mIoU(outputs, mask)
@@ -137,20 +138,22 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
                 train_dice = mIoU
             
             losses.append(loss.item())
-            train_iou.append(train_dice)
-            
+
+            train_dices.append(train_dice)
+            train_ious.append(train_IoU)
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
         if args.dataset == 'brain-mri':
-            val_mean_dice = compute_dice(model, val_loader, device=device)
+            val_mean_dice, val_mean_IoU = compute_dice(model, val_loader, device=device)
         else:
             val_loss, val_mean_dice = validation_covid(model, val_loader, loss_func=loss_func, device=device)
         
         scheduler.step(epoch)
         loss_history.append(np.array(losses).mean())
-        train_history.append(np.array(train_iou).mean())
+        train_history.append(np.array(train_dices).mean())
         val_history.append(val_mean_dice)
 
         
@@ -184,18 +187,18 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
         lr = optimizer.param_groups[0]["lr"]
 
         if args.dataset == 'brain-mri':
-            print('Epoch : {}/{} loss: {:.3f} - dice_coef: {:.3f} - val_dice_coef: {:.3f} - best_dice_coef {:.3f} - lr {:.7f}'.format(
+            print('Epoch : {}/{} loss: {:.3f} - train_dice_coef: {:.3f} - train_mIoU: {:.3f}- val_dice_coef: {:.3f} - val_IoU: {:.3f} - best_dice_coef {:.3f} - lr {:.7f}'.format(
                                                                                     epoch+1, args.epochs,np.array(losses).mean(),
-                                                                                np.array(train_iou).mean(),
-                                                                                val_mean_dice, best_dice_coef, lr))
+                                                                                np.array(train_dices).mean(), np.array(train_ious).mean(),
+                                                                                val_mean_dice, val_mean_IoU ,best_dice_coef, lr))
             if args.output_dir:
                 with (output_dir / "log.txt").open("a") as f:
-                    f.write(f"Epoch:{epoch} | Loss:{np.array(losses).mean():.3f} | Train_DICE:{train_history[-1]:.3f} | Val_DICE:{val_history[-1]:.3f} | Best_DICE:{best_dice_coef:.3f} | lr:{lr:.7f}\n")
+                    f.write(f"Epoch:{epoch} | Loss:{np.array(losses).mean():.3f} | Train_DICE:{train_history[-1]:.3f} | Val_DICE:{val_history[-1]:.3f} | Val_IoU:{val_mean_IoU:.3f} | Best_DICE:{best_dice_coef:.3f} | lr:{lr:.7f}\n")
         
         else:
             print('Epoch : {}/{} train_loss: {:.3f} - val_loss: {:.3f} - train_mIoU: {:.3f} - val_mIoU: {:.3f} - best_val_mIoU {:.3f} - lr {:.7f}'.format(
                                                                                     epoch+1, args.epochs,np.array(losses).mean(), val_loss,
-                                                                                np.array(train_iou).mean(), val_mean_dice
+                                                                                np.array(train_dices).mean(), val_mean_dice
                                                                                 , best_dice_coef, lr))
             if args.output_dir:
                 with (output_dir / "log.txt").open("a") as f:
@@ -263,7 +266,7 @@ def main(args):
     lr_scheduler, _ = create_scheduler(args, optimizer)
 
 
-    summary(model, (3, 224, 224))
+    #summary(model, (3, 224, 224))
 
 
     if args.resume:
@@ -278,8 +281,8 @@ def main(args):
     if args.eval:
          # testing
         test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=24, shuffle=False, num_workers=2)
-        test_iou = compute_dice(model, test_dataloader)
-        print("Mean IoU: {:.3f}%".format(100*test_iou))
+        test_dice, test_iou = compute_dice(model, test_dataloader)
+        print("Mean IoU: {:.3f}% - Mean dice: {:.3f}%".format(100*test_iou, 100*test_dice))
         return
     # training
     num_epochs = args.epochs
@@ -292,11 +295,6 @@ def main(args):
                                                             val_loader = val_dataloader, loss_func = loss_func, 
                                                             optimizer = optimizer, scheduler = lr_scheduler, 
                                                         )
-    
-    # testing
-
-    #test_iou = compute_dice(model, test_dataloader)
-    #print("Mean dice coef: {:.3f}%".format(100*test_iou))
 
 
 
@@ -305,20 +303,20 @@ if __name__ == '__main__':
     config=[
         '--data-path', './data',
         '--epochs' , '150',
-        '--output_dir', 'Unet_original',
+        '--output_dir', 'TransUnet',
         '--lr', '7.5e-5',
         '--min-lr', '1e-6',
         '--weight-decay','0.025',
         '--seg_struct', 'Unet',
         #'--encoder', 'resnet50',
-        #'--is-tran',
+        '--is-tran',
         #'--is-swin',
-        '--use_pretrained'
-        '--resume', 'Unet_original/checkpoint.pth',
-        '--eval',
+        #'--use-pretrained',
+        #'--resume', 'Unet_original/checkpoint.pth',
+        #'--eval',
         '--TransUnet-pretrained-path', './pretrained_ckpt/R50+ViT-B_16.npz',
         '--cfg', './configs/swin_tiny_patch4_window7_224_lite.yaml',
-        '--dataset', 'covid'
+        #'--dataset', 'covid'
     ]
     parser = argparse.ArgumentParser('DLP_Final', parents=[get_args_parser()])
     args = parser.parse_args(args=config)
