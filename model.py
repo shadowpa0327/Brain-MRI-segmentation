@@ -72,7 +72,7 @@ class OutConv(nn.Module):
         return self.conv(x)
 
 class Unet(nn.Module):
-    def __init__(self, n_channels, n_classes, bilinear=True):
+    def __init__(self, n_channels, n_classes, bilinear=True, output_activation=None):
         super(Unet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
@@ -89,7 +89,7 @@ class Unet(nn.Module):
         self.up3 = Up(256, 128//factor, bilinear)        
         self.up4 = Up(128, 64, bilinear)        
         self.outc = OutConv(64, n_classes)
-    
+        self.output_act = nn.Sigmoid()
     def forward(self, x):
         x1 = self.inc(x)
         x2 = self.down1(x1)
@@ -101,6 +101,8 @@ class Unet(nn.Module):
         x = self.up3(x, x2)
         x = self.up4(x, x1)
         logits = self.outc(x)
+        if self.output_act:
+            logits = self.output_act(logits)
         return logits
 
 # [END]=================== Unet ==================
@@ -126,9 +128,9 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
                 raise ValueError("decoder channel of Unet should be a list")
             print(f"Build Unet with encoder {encoder}, pretrained weight:{encoder_weights}")
             if encoder == 'Unet': # using Unet original structure
-                model = Unet(n_channels=input_channels,n_classes=num_classes)
+                model = Unet(n_channels=input_channels,n_classes=num_classes, output_activation=output_activation)
             else : # change Unet encoder
-                model = smp.Unet(encoder,in_channels=3, 
+                model = smp.Unet(encoder,in_channels=input_channels, 
                                         encoder_weights=encoder_weights,
                                                 classes=1, 
                                             activation=output_activation, 
@@ -139,7 +141,7 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
             if not isinstance(decoder_channels, list):
                 raise ValueError("decoder channel of Unet++ should be a list")
             print(f"Build Unet++ with encoder {encoder}, pretrained weight:{encoder_weights}")
-            model = smp.UnetPlusPlus(encoder,in_channels=3, 
+            model = smp.UnetPlusPlus(encoder,in_channels=input_channels, 
                                     encoder_weights=encoder_weights,
                                             classes=1, 
                                         activation=output_activation, 
@@ -150,7 +152,7 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
             if not isinstance(decoder_channels, int):
                 raise ValueError("decoder channel of Unet++ should be a integer")
             print(f"Build DeepLabV3Plus with encoder {encoder}")
-            model = smp.DeepLabV3Plus(encoder,in_channels=3, 
+            model = smp.DeepLabV3Plus(encoder,in_channels=input_channels, 
                                     encoder_weights=encoder_weights,
                                             classes=1, 
                                         activation=output_activation, 
@@ -163,12 +165,12 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
         model = SwinUnet(config=config, img_size=224, num_classes=1).to('cuda')
         if args.use_pretrained:
             model.load_from(config)
-        print(f"Creating model Swin-Unet")
+        print(f"Creating model Swin-Unet, using pretrained:{args.use_pretrained}")
         return model
     elif is_tran :
         #config_vit = CONFIGS_ViT_seg['R50-ViT-B_16']
         config_vit = CONFIGS_ViT_seg[args.vit_name]
-        print(config_vit)
+        #print(config_vit)
         config_vit.n_classes = num_classes
         config_vit.n_skip = args.n_skip
         if args.vit_name.find('R50') != -1:
@@ -176,6 +178,7 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
         model = ViT_seg(config_vit, img_size=args.img_size, num_classes=config_vit.n_classes)
         if args.use_pretrained:
             model.load_from(weights=np.load(args.TransUnet_pretrained_path))
+        print(f"Creating model TransUnet, using pretrained:{args.use_pretrained}")
         return model
 
             
