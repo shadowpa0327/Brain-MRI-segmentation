@@ -34,6 +34,7 @@ def iou_metric(y_pred, y_true):
     return iou
 
 def compute_dice(model, loader, threshold=0.3, device = 'cuda'):
+    model.eval()
     valdice = 0
     with torch.no_grad():
         for step, (data, target) in enumerate(loader, 1):
