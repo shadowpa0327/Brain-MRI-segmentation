@@ -2,7 +2,7 @@ import segmentation_models_pytorch as smp
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# from config import get_config
+from config import get_config
 from networks.vision_transformer import SwinUnet
 from networks.vit_seg_modeling import VisionTransformer as ViT_seg
 from networks.vit_seg_modeling import CONFIGS as CONFIGS_ViT_seg
@@ -131,7 +131,7 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
                 model = smp.Unet(encoder,in_channels=3, 
                                         encoder_weights=encoder_weights,
                                                 classes=1, 
-                                            activation='sigmoid', 
+                                            activation=output_activation, 
                                         encoder_depth=5, 
                                     decoder_channels=decoder_channels)
             
@@ -142,24 +142,23 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
             model = smp.UnetPlusPlus(encoder,in_channels=3, 
                                     encoder_weights=encoder_weights,
                                             classes=1, 
-                                        activation='sigmoid', 
+                                        activation=output_activation, 
                                     encoder_depth=5, 
                                 decoder_channels=decoder_channels)
 
         elif seg_struct == 'DeepLabV3Plus':
-            if not isinstance(decoder_channels, list):
-                raise ValueError("decoder channel of Unet++ should be a list")
+            if not isinstance(decoder_channels, int):
+                raise ValueError("decoder channel of Unet++ should be a integer")
             print(f"Build DeepLabV3Plus with encoder {encoder}")
             model = smp.DeepLabV3Plus(encoder,in_channels=3, 
                                     encoder_weights=encoder_weights,
                                             classes=1, 
-                                        activation='sigmoid', 
+                                        activation=output_activation, 
                                     encoder_depth=5)
         else : 
             raise ValueError(f"Illegal segmentation structure name {seg_struct}")
         return model
     elif is_swin: # using swin transformer
-
         config = get_config(args=args)
         model = SwinUnet(config=config, img_size=224, num_classes=1).to('cuda')
         if args.use_pretrained:
@@ -170,12 +169,13 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
         #config_vit = CONFIGS_ViT_seg['R50-ViT-B_16']
         config_vit = CONFIGS_ViT_seg[args.vit_name]
         print(config_vit)
-        config_vit.n_classes = 1
+        config_vit.n_classes = num_classes
         config_vit.n_skip = args.n_skip
         if args.vit_name.find('R50') != -1:
             config_vit.patches.grid = (int(args.img_size / args.vit_patches_size), int(args.img_size / args.vit_patches_size))
         model = ViT_seg(config_vit, img_size=args.img_size, num_classes=config_vit.n_classes)
-        #model.load_from(weights=np.load(args.TransUnet_pretrained_path))
+        if args.use_pretrained:
+            model.load_from(weights=np.load(args.TransUnet_pretrained_path))
         return model
 
             

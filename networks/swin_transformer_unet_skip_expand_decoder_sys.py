@@ -732,7 +732,8 @@ class SwinTransformerSys(nn.Module):
             x = x.view(B,4*H,4*W,-1)
             x = x.permute(0,3,1,2) #B,C,H,W
             x = self.output(x)
-            x = self.act(x)
+            if self.num_classes == 1:
+                x = self.act(x)
         return x
 
     def forward(self, x):
