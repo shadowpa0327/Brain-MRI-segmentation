@@ -2,7 +2,7 @@ import segmentation_models_pytorch as smp
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from config import get_config
+# from config import get_config
 from networks.vision_transformer import SwinUnet
 from networks.vit_seg_modeling import VisionTransformer as ViT_seg
 from networks.vit_seg_modeling import CONFIGS as CONFIGS_ViT_seg
@@ -58,9 +58,16 @@ class Up(nn.Module):
 class OutConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(OutConv, self).__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=1),
-            nn.Sigmoid())
+        if out_channels == 1:
+            self.conv = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1),
+                nn.Sigmoid())
+        else:
+            # Output logits only if not binary segmentation
+            self.conv = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1)
+                )
+
     def forward(self, x):
         return self.conv(x)
 
@@ -98,19 +105,32 @@ class Unet(nn.Module):
 
 # [END]=================== Unet ==================
 
-def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_channels = None ,is_swin = False, is_tran=True):
+"""
+    Build model according to given arguments.
+    Parameters:
+        input_channels: Number of channels of input image. Default is 3. If grayscale, channel number equals 1.
+        num_classes: Number of classes for segmentation. Default is 1 for binary segmentation.
+                     Note that if classes > 1, the output of models will be raw logits (no sigmoid).
+"""
+def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_channels = None ,is_swin = False, is_tran=True, input_channels=3, num_classes=1):
+    # Parameters definition
+    if num_classes == 1:
+        output_activation = 'sigmoid'
+    else:
+        output_activation = None
+    
     if not is_swin and not is_tran:
         if seg_struct == 'Unet':
             if not isinstance(decoder_channels, list):
                 raise ValueError("decoder channel of Unet should be a list")
             print(f"Build Unet with encoder {encoder}")
             if encoder == 'Unet': # using Unet original structure
-                model = Unet(n_channels=3,n_classes=1)
+                model = Unet(n_channels=input_channels,n_classes=num_classes)
             else : # change Unet encoder
-                model = smp.Unet(encoder,in_channels=3, 
+                model = smp.Unet(encoder,in_channels=input_channels, 
                                         encoder_weights='imagenet',
-                                                classes=1, 
-                                            activation='sigmoid', 
+                                                classes=num_classes, 
+                                            activation=output_activation, 
                                         encoder_depth=5, 
                                     decoder_channels=decoder_channels)
             
@@ -118,20 +138,21 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
             if not isinstance(decoder_channels, list):
                 raise ValueError("decoder channel of Unet++ should be a list")
             print(f"Build Unet++ with encoder {encoder}")
-            model = smp.UnetPlusPlus(encoder,in_channels=3, 
+            model = smp.UnetPlusPlus(encoder,in_channels=input_channels, 
                                     encoder_weights='imagenet',
-                                            classes=1, 
-                                        activation='sigmoid', 
+                                            classes=num_classes, 
+                                        activation=output_activation, 
                                     encoder_depth=5, 
                                 decoder_channels=decoder_channels)
+
         elif seg_struct == 'DeepLabV3Plus':
             if not isinstance(decoder_channels, list):
                 raise ValueError("decoder channel of Unet++ should be a list")
             print(f"Build DeepLabV3Plus with encoder {encoder}")
-            model = smp.DeepLabV3Plus(encoder,in_channels=3, 
+            model = smp.DeepLabV3Plus(encoder,in_channels=input_channels, 
                                     encoder_weights='imagenet',
-                                            classes=1, 
-                                        activation='sigmoid', 
+                                            classes=num_classes, 
+                                        activation=output_activation, 
                                     encoder_depth=5)
         else : 
             raise ValueError(f"Illegal segmentation structure name {seg_struct}")

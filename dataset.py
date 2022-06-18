@@ -95,6 +95,84 @@ class BrainDataset(Dataset):
         
         return image, mask
 
+def onehot_to_mask(mask, palette):
+    """
+    Converts a mask (H, W, K) to (H, W, C)
+    E.g. [0,0,0,1] -> 3
+         [1,0,0,0] -> 1
+    """
+    x = np.argmax(mask, axis=-1)
+    colour_codes = np.array(palette)
+    x = np.uint8(colour_codes[x.astype(np.uint8)])
+    return x
+
+def preprocess_images(images_arr, mean_std=None):
+    images_arr[images_arr > 500] = 500
+    images_arr[images_arr < -1500] = -1500
+    min_perc, max_perc = np.percentile(images_arr, 5), np.percentile(images_arr, 95)
+    images_arr_valid = images_arr[(images_arr > min_perc) & (images_arr < max_perc)]
+    mean, std = (images_arr_valid.mean(), images_arr_valid.std()) if mean_std is None else mean_std
+    images_arr = (images_arr - mean) / std
+    print(f'mean {mean}, std {std}')
+    return images_arr, (mean, std)
+
+def read_covid_data(ROOT_PATH='../covid-segmentation/'):
+    
+    images_radiopedia = np.load(os.path.join(ROOT_PATH, 'images_radiopedia.npy')).astype(np.float32)
+    masks_radiopedia = np.load(os.path.join(ROOT_PATH, 'masks_radiopedia.npy')).astype(np.int8)
+    images_medseg = np.load(os.path.join(ROOT_PATH, 'images_medseg.npy')).astype(np.float32)
+    masks_medseg = np.load(os.path.join(ROOT_PATH, 'masks_medseg.npy')).astype(np.int8)
+    test_images_medseg = np.load(os.path.join(ROOT_PATH, 'test_images_medseg.npy')).astype(np.float32)
+    palette = [[0], [1], [2],[3]]
+    
+    masks_radiopedia_recover = onehot_to_mask(masks_radiopedia, palette).squeeze()  # shape = (H, W)
+    masks_medseg_recover = onehot_to_mask(masks_medseg, palette).squeeze()  # shape = (H, W)
+
+    images_radiopedia, mean_std = preprocess_images(images_radiopedia)
+    images_medseg, _ = preprocess_images(images_medseg, mean_std)
+    test_images_medseg, _ = preprocess_images(test_images_medseg, mean_std)
+
+    masks_radiopedia_recover = onehot_to_mask(masks_radiopedia, palette).squeeze()  # shape = (H, W)
+    masks_medseg_recover = onehot_to_mask(masks_medseg, palette).squeeze()  # shape = (H, W)
+
+    val_indexes, train_indexes = list(range(24)), list(range(24, 100))
+
+    train_images = np.concatenate((images_medseg[train_indexes], images_radiopedia))
+    train_masks = np.concatenate((masks_medseg_recover[train_indexes], masks_radiopedia_recover))
+    val_images = images_medseg[val_indexes]
+    val_masks = masks_medseg_recover[val_indexes]
+
+    return (train_images, train_masks), (val_images, val_masks), test_images_medseg
+
+class CovidDataset:
+    def __init__(self, images, masks, augmentations=None):
+        self.images = images
+        self.masks = masks
+        self.augmentations = augmentations
+        self.mean = [0.485]
+        self.std = [0.229]
+    
+    def __getitem__(self, i):
+        image = self.images[i]
+        mask = self.masks[i]
+        
+        if self.augmentations is not None:
+            sample = self.augmentations(image=image, mask=mask)
+            # Check later for why
+            image, mask = Image.fromarray(np.squeeze(sample['image'], axis=2)), sample['mask']
+        
+        if self.augmentations is None:
+            image = Image.fromarray(image)
+        
+        t = T.Compose([T.ToTensor(), T.Normalize(self.mean, self.std)])
+        image = t(image) # Normalize images
+        mask = torch.from_numpy(mask).long()
+    
+        return image, mask
+    
+    def __len__(self):
+        return len(self.images)
+
 
 def build_dataset(train_df, val_df, test_df):
     train_transform = build_transform(mode = 'train')
@@ -110,3 +188,12 @@ def build_dataset(train_df, val_df, test_df):
     
     return train_dataset, val_dataset, test_dataset
 
+
+def build_covid_dataset(train_data, val_data):
+    train_transform = build_transform(mode = 'train')
+    train_dataset = CovidDataset(train_data[0], train_data[1], train_transform)
+
+    val_transform = build_transform(mode = 'val')
+    val_dataset = CovidDataset(val_data[0], val_data[1], val_transform)
+
+    return train_dataset, val_dataset

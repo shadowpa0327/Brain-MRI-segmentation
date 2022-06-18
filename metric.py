@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+from engine import mIoU
 
 
 def dice_coef_metric(pred, label):
@@ -28,9 +29,9 @@ def iou_metric(y_pred, y_true):
     return iou
 
 def compute_dice(model, loader, threshold=0.3, device = 'cuda'):
-    valloss = 0
+    valdice = 0
     with torch.no_grad():
-        for step, (data, target) in enumerate(loader):
+        for step, (data, target) in enumerate(loader, 1):
             data = data.to(device)
             target = target.to(device)
 
@@ -39,7 +40,29 @@ def compute_dice(model, loader, threshold=0.3, device = 'cuda'):
             out_cut[np.nonzero(out_cut < threshold)] = 0.0
             out_cut[np.nonzero(out_cut >= threshold)] = 1.0
 
-            loss = dice_coef_metric(out_cut, target.data.cpu().numpy())
-            valloss += loss
+            dice = dice_coef_metric(out_cut, target.data.cpu().numpy())
+            valdice += dice
 
-    return valloss / step
+    return valdice / step
+
+"""
+Returns a tuple:
+    (validation_loss, validation_mIoU)
+"""
+def validation_covid(model, loader, loss_func, device = 'cuda'):
+    running_mIoU = 0
+    running_loss = 0
+    print(loader)
+    with torch.no_grad():
+        for step, (data, target) in enumerate(loader,1):
+            data = data.to(device)
+            target = target.to(device)
+
+            outputs = model(data)
+            mIoU_val = mIoU(outputs, target)
+            loss = loss_func(outputs, target).item()
+            
+            running_loss += loss
+            running_mIoU += mIoU_val
+
+    return running_loss / step, running_mIoU / step
