@@ -249,6 +249,14 @@ def main(args):
                         input_channels = input_channels,
                         num_classes = num_classes
                 )
+    if args.is_swin:
+        model_name = 'SwinUnet'
+    elif args.is_tran:
+        model_name = 'TransUnet'
+    else:
+        model_name = f'{args.seg_struct}, with encoder: {args.encoder}'
+    with (output_dir / "log.txt").open("a") as f:
+                f.write(f"Model: {model_name}\n")
 
     model = model.to(device)
 
@@ -286,7 +294,7 @@ def main(args):
     if args.dataset == 'brain-mri':
         loss_func = bce_dice_loss
     else:
-        loss_func = smp.losses.DiceLoss(mode='multiclass')
+        loss_func = ce_dice_loss
     loss_history, train_history, val_history = train_model(args = args, model = model, train_loader = train_dataloader, 
                                                             val_loader = val_dataloader, loss_func = loss_func, 
                                                             optimizer = optimizer, scheduler = lr_scheduler, 
@@ -304,12 +312,12 @@ if __name__ == '__main__':
     config=[
         '--data-path', './data',
         '--epochs' , '10',
-        '--output_dir', 'Unet_test',
+        '--output_dir', 'Unet_test_resnet50',
         '--lr', '1e-4',
         '--min-lr', '1e-6',
         '--weight-decay','0.01',
         '--seg_struct', 'Unet',
-        '--encoder', 'Unet',
+        '--encoder', 'resnet50',
         #'--is-tran',
         # '--resume', 'Unet_efficient_net/checkpoint.pth',
         # '--eval',

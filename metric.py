@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from engine import mIoU
+import segmentation_models_pytorch as smp
 
 
 def dice_coef_metric(pred, label):
@@ -21,6 +22,10 @@ def bce_dice_loss(pred, label):
     bce_loss = nn.BCELoss()(pred, label)
     return dice_loss + bce_loss
 
+def ce_dice_loss(pred, label):
+    dice_loss = smp.losses.DiceLoss(mode='multiclass')(pred, label)
+    ce_loss = smp.losses.SoftCrossEntropyLoss(smooth_factor=0.0)(pred, label)
+    return dice_loss + ce_loss
 
 def iou_metric(y_pred, y_true):
     intersec = (y_true * y_pred).sum()
@@ -52,7 +57,6 @@ Returns a tuple:
 def validation_covid(model, loader, loss_func, device = 'cuda'):
     running_mIoU = 0
     running_loss = 0
-    print(loader)
     with torch.no_grad():
         for step, (data, target) in enumerate(loader,1):
             data = data.to(device)
