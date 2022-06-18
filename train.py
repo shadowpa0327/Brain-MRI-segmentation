@@ -76,6 +76,8 @@ def get_args_parser():
     parser.add_argument('--seg_struct', type=str, default='Unet', help="The type of segmentation model (Unet/Unet++)")
     parser.add_argument('--encoder', type=str, default='resnet50', 
                         help="The encoder to be use in the segmentation model check model.py for detailed")
+    parser.add_argument('--use-pretrained', action='store_true')
+    parser.set_defaults(use_pretrained=False)
     parser.add_argument('--is-swin', action='store_true')
     parser.set_defaults(is_swin=False)
     # TransUnet
@@ -127,7 +129,7 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
+        #model.eval()
         val_mean_dice = compute_dice(model, val_loader, device=device)
         scheduler.step(epoch)
         loss_history.append(np.array(losses).mean())
@@ -210,8 +212,7 @@ def main(args):
     lr_scheduler, _ = create_scheduler(args, optimizer)
 
 
-    print(model)
-    #summary(model, (3, 224, 224))
+    summary(model, (3, 224, 224))
 
 
     if args.resume:
@@ -247,16 +248,18 @@ def main(args):
 if __name__ == '__main__':
     config=[
         '--data-path', './data',
-        '--epochs' , '100',
-        '--output_dir', 'Unet_efficient_net',
-        '--lr', '1e-4',
+        '--epochs' , '150',
+        '--output_dir', 'Unet_original',
+        '--lr', '7.5e-5',
         '--min-lr', '1e-6',
-        '--weight-decay','0.01',
+        '--weight-decay','0.025',
         '--seg_struct', 'Unet',
-        '--encoder', 'timm-efficientnet-b6',
+        #'--encoder', 'resnet50',
         #'--is-tran',
-        #'--resume', 'TranUnet/checkpoint.pth',
-        #'--eval',
+        #'--is-swin',
+        '--use_pretrained'
+        '--resume', 'Unet_original/checkpoint.pth',
+        '--eval',
         '--TransUnet-pretrained-path', './pretrained_ckpt/R50+ViT-B_16.npz',
         '--cfg', './configs/swin_tiny_patch4_window7_224_lite.yaml'
     ]
