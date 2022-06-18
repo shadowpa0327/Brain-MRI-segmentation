@@ -304,31 +304,18 @@ def main(args):
 if __name__ == '__main__':
     config=[
         '--data-path', './data',
-<<<<<<< HEAD
         '--epochs' , '150',
         '--output_dir', 'Unet_original',
         '--lr', '7.5e-5',
-=======
-        '--epochs' , '10',
-        '--output_dir', 'Unet_test',
-        '--lr', '1e-4',
->>>>>>> 985c1aad133491046cc48544a2bd24823ac891e3
         '--min-lr', '1e-6',
         '--weight-decay','0.025',
         '--seg_struct', 'Unet',
-<<<<<<< HEAD
         #'--encoder', 'resnet50',
         #'--is-tran',
         #'--is-swin',
         '--use_pretrained'
         '--resume', 'Unet_original/checkpoint.pth',
         '--eval',
-=======
-        '--encoder', 'Unet',
-        #'--is-tran',
-        # '--resume', 'Unet_efficient_net/checkpoint.pth',
-        # '--eval',
->>>>>>> 985c1aad133491046cc48544a2bd24823ac891e3
         '--TransUnet-pretrained-path', './pretrained_ckpt/R50+ViT-B_16.npz',
         '--cfg', './configs/swin_tiny_patch4_window7_224_lite.yaml',
         '--dataset', 'covid'
