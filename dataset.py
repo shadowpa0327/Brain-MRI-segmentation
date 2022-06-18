@@ -135,12 +135,10 @@ def read_covid_data(ROOT_PATH='../covid-segmentation/'):
     masks_radiopedia_recover = onehot_to_mask(masks_radiopedia, palette).squeeze()  # shape = (H, W)
     masks_medseg_recover = onehot_to_mask(masks_medseg, palette).squeeze()  # shape = (H, W)
 
-    val_indexes, train_indexes = list(range(24)), list(range(24, 100))
-
-    train_images = np.concatenate((images_medseg[train_indexes], images_radiopedia))
-    train_masks = np.concatenate((masks_medseg_recover[train_indexes], masks_radiopedia_recover))
-    val_images = images_medseg[val_indexes]
-    val_masks = masks_medseg_recover[val_indexes]
+    train_images = images_radiopedia
+    train_masks = masks_radiopedia_recover
+    val_images = images_medseg
+    val_masks = masks_medseg_recover
 
     return (train_images, train_masks), (val_images, val_masks), test_images_medseg
 
