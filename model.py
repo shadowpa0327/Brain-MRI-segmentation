@@ -100,15 +100,16 @@ class Unet(nn.Module):
 
 def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_channels = None ,is_swin = False, is_tran=True):
     if not is_swin and not is_tran:
+        encoder_weights = 'imagenet' if args.use_pretrained else None
         if seg_struct == 'Unet':
             if not isinstance(decoder_channels, list):
                 raise ValueError("decoder channel of Unet should be a list")
-            print(f"Build Unet with encoder {encoder}")
+            print(f"Build Unet with encoder {encoder}, pretrained weight:{encoder_weights}")
             if encoder == 'Unet': # using Unet original structure
                 model = Unet(n_channels=3,n_classes=1)
             else : # change Unet encoder
                 model = smp.Unet(encoder,in_channels=3, 
-                                        encoder_weights='imagenet',
+                                        encoder_weights=encoder_weights,
                                                 classes=1, 
                                             activation='sigmoid', 
                                         encoder_depth=5, 
@@ -117,9 +118,9 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
         elif seg_struct == 'Unet++':
             if not isinstance(decoder_channels, list):
                 raise ValueError("decoder channel of Unet++ should be a list")
-            print(f"Build Unet++ with encoder {encoder}")
+            print(f"Build Unet++ with encoder {encoder}, pretrained weight:{encoder_weights}")
             model = smp.UnetPlusPlus(encoder,in_channels=3, 
-                                    encoder_weights='imagenet',
+                                    encoder_weights=encoder_weights,
                                             classes=1, 
                                         activation='sigmoid', 
                                     encoder_depth=5, 
@@ -129,7 +130,7 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
                 raise ValueError("decoder channel of Unet++ should be a list")
             print(f"Build DeepLabV3Plus with encoder {encoder}")
             model = smp.DeepLabV3Plus(encoder,in_channels=3, 
-                                    encoder_weights='imagenet',
+                                    encoder_weights=encoder_weights,
                                             classes=1, 
                                         activation='sigmoid', 
                                     encoder_depth=5)
@@ -137,9 +138,12 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
             raise ValueError(f"Illegal segmentation structure name {seg_struct}")
         return model
     elif is_swin: # using swin transformer
+
         config = get_config(args=args)
         model = SwinUnet(config=config, img_size=224, num_classes=1).to('cuda')
-        model.load_from(config)
+        if args.use_pretrained:
+            model.load_from(config)
+        print(f"Creating model Swin-Unet")
         return model
     elif is_tran :
         #config_vit = CONFIGS_ViT_seg['R50-ViT-B_16']
@@ -150,7 +154,7 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
         if args.vit_name.find('R50') != -1:
             config_vit.patches.grid = (int(args.img_size / args.vit_patches_size), int(args.img_size / args.vit_patches_size))
         model = ViT_seg(config_vit, img_size=args.img_size, num_classes=config_vit.n_classes)
-        model.load_from(weights=np.load(args.TransUnet_pretrained_path))
+        #model.load_from(weights=np.load(args.TransUnet_pretrained_path))
         return model
 
             
