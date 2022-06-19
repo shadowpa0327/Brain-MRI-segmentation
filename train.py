@@ -18,7 +18,7 @@ import albumentations as A
 from model import build_model
 from dataset import *
 from metric import *
-from engine import mIoU as eval_mIoU
+from engine import mIoU as eval_mIoU, multiclass_dice as eval_multiclass_dice
 from engine import pixel_accuracy
 
 from timm.scheduler import create_scheduler
@@ -133,9 +133,9 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
                 train_IoU = iou_metric(out_cut, mask.data.cpu().numpy())           
                 train_dice = dice_coef_metric(out_cut, mask.data.cpu().numpy())
             else:
-                mIoU = eval_mIoU(outputs, mask)
+                train_IoU = eval_mIoU(outputs, mask)
                 pAcc = pixel_accuracy(outputs, mask)
-                train_dice = mIoU
+                train_dice = eval_multiclass_dice(outputs, mask)
             
             losses.append(loss.item())
 
@@ -149,7 +149,7 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
         if args.dataset == 'brain-mri':
             val_mean_dice, val_mean_IoU = compute_dice(model, val_loader, device=device)
         else:
-            val_loss, val_mean_dice = validation_covid(model, val_loader, loss_func=loss_func, device=device)
+            val_loss, val_mIoU, val_mean_dice = validation_covid(model, val_loader, loss_func=loss_func, device=device)
         
         scheduler.step(epoch)
         loss_history.append(np.array(losses).mean())
@@ -196,13 +196,14 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
                     f.write(f"Epoch:{epoch} | Loss:{np.array(losses).mean():.3f} | Train_DICE:{train_history[-1]:.3f} | Val_DICE:{val_history[-1]:.3f} | Val_IoU:{val_mean_IoU:.3f} | Best_DICE:{best_dice_coef:.3f} | lr:{lr:.7f}\n")
         
         else:
-            print('Epoch : {}/{} train_loss: {:.3f} - val_loss: {:.3f} - train_mIoU: {:.3f} - val_mIoU: {:.3f} - best_val_mIoU {:.3f} - lr {:.7f}'.format(
-                                                                                    epoch+1, args.epochs,np.array(losses).mean(), val_loss,
-                                                                                np.array(train_dices).mean(), val_mean_dice
-                                                                                , best_dice_coef, lr))
+            print('Epoch : {}/{} train_loss: {:.3f} - val_loss: {:.3f} - train_dice_coef: {:.3f} - train_mIoU: {:.3f} - val_dice_coef: {:.3f} - val_mIoU: {:.3f} - best_dice_coef {:.3f} - lr {:.7f}'.format(
+                                                                                epoch+1, args.epochs,np.array(losses).mean(), val_loss,
+                                                                                np.array(train_dices).mean(), np.array(train_ious).mean(),
+                                                                                val_mean_dice, val_mIoU, 
+                                                                                best_dice_coef, lr))
             if args.output_dir:
                 with (output_dir / "log.txt").open("a") as f:
-                    f.write(f"Epoch:{epoch} | Train_Loss:{np.array(losses).mean():.3f} | Val_Loss:{val_loss:.3f} | Train_mIoU:{train_history[-1]:.3f} | Val_mIoU:{val_history[-1]:.3f} | Best_mIoU:{best_dice_coef:.3f} | lr:{lr:.7f}\n")
+                    f.write(f"Epoch:{epoch} | Train_Loss:{np.array(losses).mean():.3f} | Val_Loss:{val_loss:.3f} | Train_DICE:{np.array(train_dices).mean():.3f} | Train_mIoU:{np.array(train_ious).mean():.3f} | Val_DICE:{val_mean_dice:.3f} | Val_mIoU:{val_mIoU:.3f} | Best_DICE:{best_dice_coef:.3f} | lr:{lr:.7f}\n")
         
     return loss_history, train_history, val_history
 
