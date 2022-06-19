@@ -2,7 +2,7 @@ import segmentation_models_pytorch as smp
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# from config import get_config
+from config import get_config
 from networks.vision_transformer import SwinUnet
 from networks.vit_seg_modeling import VisionTransformer as ViT_seg
 from networks.vit_seg_modeling import CONFIGS as CONFIGS_ViT_seg
@@ -162,7 +162,7 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
         return model
     elif is_swin: # using swin transformer
         config = get_config(args=args)
-        model = SwinUnet(config=config, img_size=224, num_classes=1).to('cuda')
+        model = SwinUnet(config=config, img_size=224, num_classes=num_classes).to('cuda')
         if args.use_pretrained:
             model.load_from(config)
         print(f"Creating model Swin-Unet, using pretrained:{args.use_pretrained}")
