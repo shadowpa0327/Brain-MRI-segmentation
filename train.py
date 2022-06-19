@@ -18,7 +18,7 @@ import albumentations as A
 from model import build_model
 from dataset import *
 from metric import *
-from engine import mIoU as eval_mIoU
+from engine import mIoU as eval_mIoU, multiclass_dice as eval_multiclass_dice
 from engine import pixel_accuracy
 
 from timm.scheduler import create_scheduler
@@ -118,6 +118,7 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
 
         losses = []
         train_iou = []
+        train_dices = []
 
         for i, (image, mask) in enumerate(train_loader):
             image = image.to(device)
@@ -134,10 +135,11 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
             else:
                 mIoU = eval_mIoU(outputs, mask)
                 pAcc = pixel_accuracy(outputs, mask)
-                train_dice = mIoU
+                train_dice = eval_multiclass_dice(outputs, mask)
             
             losses.append(loss.item())
-            train_iou.append(train_dice)
+            train_iou.append(mIoU)
+            train_dices.append(train_dice)
             
             optimizer.zero_grad()
             loss.backward()
@@ -146,7 +148,7 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
         if args.dataset == 'brain-mri':
             val_mean_dice = compute_dice(model, val_loader, device=device)
         else:
-            val_loss, val_mean_dice = validation_covid(model, val_loader, loss_func=loss_func, device=device)
+            val_loss, val_mIoU, val_mean_dice = validation_covid(model, val_loader, loss_func=loss_func, device=device)
         
         scheduler.step(epoch)
         loss_history.append(np.array(losses).mean())
@@ -186,20 +188,21 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
         if args.dataset == 'brain-mri':
             print('Epoch : {}/{} loss: {:.3f} - dice_coef: {:.3f} - val_dice_coef: {:.3f} - best_dice_coef {:.3f} - lr {:.7f}'.format(
                                                                                     epoch+1, args.epochs,np.array(losses).mean(),
-                                                                                np.array(train_iou).mean(),
+                                                                                np.array(train_dices).mean(),
                                                                                 val_mean_dice, best_dice_coef, lr))
             if args.output_dir:
                 with (output_dir / "log.txt").open("a") as f:
                     f.write(f"Epoch:{epoch} | Loss:{np.array(losses).mean():.3f} | Train_DICE:{train_history[-1]:.3f} | Val_DICE:{val_history[-1]:.3f} | Best_DICE:{best_dice_coef:.3f} | lr:{lr:.7f}\n")
         
         else:
-            print('Epoch : {}/{} train_loss: {:.3f} - val_loss: {:.3f} - train_mIoU: {:.3f} - val_mIoU: {:.3f} - best_val_mIoU {:.3f} - lr {:.7f}'.format(
-                                                                                    epoch+1, args.epochs,np.array(losses).mean(), val_loss,
-                                                                                np.array(train_iou).mean(), val_mean_dice
-                                                                                , best_dice_coef, lr))
+            print('Epoch : {}/{} train_loss: {:.3f} - val_loss: {:.3f} - train_dice_coef: {:.3f} - train_mIoU: {:.3f} - val_dice_coef: {:.3f} - val_mIoU: {:.3f} - best_dice_coef {:.3f} - lr {:.7f}'.format(
+                                                                                epoch+1, args.epochs,np.array(losses).mean(), val_loss,
+                                                                                np.array(train_dices).mean(), np.array(train_iou).mean(),
+                                                                                val_mean_dice, val_mIoU, 
+                                                                                best_dice_coef, lr))
             if args.output_dir:
                 with (output_dir / "log.txt").open("a") as f:
-                    f.write(f"Epoch:{epoch} | Train_Loss:{np.array(losses).mean():.3f} | Val_Loss:{val_loss:.3f} | Train_mIoU:{train_history[-1]:.3f} | Val_mIoU:{val_history[-1]:.3f} | Best_mIoU:{best_dice_coef:.3f} | lr:{lr:.7f}\n")
+                    f.write(f"Epoch:{epoch} | Train_Loss:{np.array(losses).mean():.3f} | Val_Loss:{val_loss:.3f} | Train_DICE:{np.array(train_dices).mean():.3f} | Train_mIoU:{np.array(train_iou).mean():.3f} | Val_DICE:{val_mean_dice:.3f} | Val_mIoU:{val_mIoU:.3f} | Best_DICE:{best_dice_coef:.3f} | lr:{lr:.7f}\n")
         
     return loss_history, train_history, val_history
 
@@ -271,7 +274,7 @@ def main(args):
     lr_scheduler, _ = create_scheduler(args, optimizer)
 
 
-    summary(model, (3, 224, 224))
+    summary(model, (1, 224, 224))
 
 
     if args.resume:
@@ -312,18 +315,18 @@ def main(args):
 if __name__ == '__main__':
     config=[
         '--data-path', './data',
-        '--epochs' , '150',
-        '--output_dir', 'Unet_original',
+        '--epochs' , '100',
+        '--output_dir', 'Unetpp_resnet50_Covid_test',
         '--lr', '7.5e-5',
         '--min-lr', '1e-6',
         '--weight-decay','0.025',
-        '--seg_struct', 'Unet',
-        #'--encoder', 'resnet50',
+        '--seg_struct', 'Unet++',
+        '--encoder', 'resnet50',
         #'--is-tran',
         #'--is-swin',
-        '--use_pretrained'
-        '--resume', 'Unet_original/checkpoint.pth',
-        '--eval',
+        '--use-pretrained',
+        # '--resume', 'Unet_original/checkpoint.pth',
+        # '--eval',
         '--TransUnet-pretrained-path', './pretrained_ckpt/R50+ViT-B_16.npz',
         '--cfg', './configs/swin_tiny_patch4_window7_224_lite.yaml',
         '--dataset', 'covid'

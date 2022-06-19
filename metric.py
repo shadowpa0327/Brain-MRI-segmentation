@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from engine import mIoU
+from engine import mIoU, multiclass_dice
 import segmentation_models_pytorch as smp
 
 
@@ -58,6 +58,7 @@ Returns a tuple:
 def validation_covid(model, loader, loss_func, device = 'cuda'):
     running_mIoU = 0
     running_loss = 0
+    running_dice = 0
     with torch.no_grad():
         for step, (data, target) in enumerate(loader,1):
             data = data.to(device)
@@ -65,9 +66,12 @@ def validation_covid(model, loader, loss_func, device = 'cuda'):
 
             outputs = model(data)
             mIoU_val = mIoU(outputs, target)
+            dice_val = multiclass_dice(outputs, target)
             loss = loss_func(outputs, target).item()
             
             running_loss += loss
             running_mIoU += mIoU_val
+            running_dice += dice_val
 
-    return running_loss / step, running_mIoU / step
+    return running_loss / step, running_mIoU / step, running_dice / step
+

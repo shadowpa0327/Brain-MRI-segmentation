@@ -2,7 +2,7 @@ import segmentation_models_pytorch as smp
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from config import get_config
+# from config import get_config
 from networks.vision_transformer import SwinUnet
 from networks.vit_seg_modeling import VisionTransformer as ViT_seg
 from networks.vit_seg_modeling import CONFIGS as CONFIGS_ViT_seg
@@ -128,9 +128,9 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
             if encoder == 'Unet': # using Unet original structure
                 model = Unet(n_channels=input_channels,n_classes=num_classes)
             else : # change Unet encoder
-                model = smp.Unet(encoder,in_channels=3, 
+                model = smp.Unet(encoder,in_channels=input_channels, 
                                         encoder_weights=encoder_weights,
-                                                classes=1, 
+                                                classes=num_classes, 
                                             activation=output_activation, 
                                         encoder_depth=5, 
                                     decoder_channels=decoder_channels)
@@ -139,9 +139,9 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
             if not isinstance(decoder_channels, list):
                 raise ValueError("decoder channel of Unet++ should be a list")
             print(f"Build Unet++ with encoder {encoder}, pretrained weight:{encoder_weights}")
-            model = smp.UnetPlusPlus(encoder,in_channels=3, 
+            model = smp.UnetPlusPlus(encoder,in_channels=input_channels, 
                                     encoder_weights=encoder_weights,
-                                            classes=1, 
+                                            classes=num_classes, 
                                         activation=output_activation, 
                                     encoder_depth=5, 
                                 decoder_channels=decoder_channels)
@@ -150,9 +150,9 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
             if not isinstance(decoder_channels, int):
                 raise ValueError("decoder channel of Unet++ should be a integer")
             print(f"Build DeepLabV3Plus with encoder {encoder}")
-            model = smp.DeepLabV3Plus(encoder,in_channels=3, 
+            model = smp.DeepLabV3Plus(encoder,in_channels=input_channels, 
                                     encoder_weights=encoder_weights,
-                                            classes=1, 
+                                            classes=num_classes, 
                                         activation=output_activation, 
                                     encoder_depth=5)
         else : 
