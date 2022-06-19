@@ -210,6 +210,8 @@ def train_model(args, model, train_loader, val_loader, loss_func, optimizer, sch
 def main(args):
 
     seed = args.seed
+    torch.manual_seed(seed)
+    np.random.seed(seed)
     device = torch.device(args.device)
     output_dir = Path(args.output_dir)
 
@@ -311,16 +313,16 @@ if __name__ == '__main__':
     config=[
         '--data-path', './data',
         '--epochs' , '150',
-        '--output_dir', 'TransUnet',
-        '--lr', '7.5e-5',
+        '--output_dir', 'Swin-Unet_wo_pretrained',
+        '--lr', '1e-4',
         '--min-lr', '1e-6',
-        '--weight-decay','0.025',
+        '--weight-decay','0.05',
         '--seg_struct', 'Unet',
-        #'--encoder', 'resnet50',
-        '--is-tran',
-        #'--is-swin',
+        '--encoder', 'resnet50',
+        #'--is-tran',
+        '--is-swin',
         #'--use-pretrained',
-        #'--resume', 'Unet_original/checkpoint.pth',
+        #'--resume', 'Swin-Unet_wo_pretrained/checkpoint.pth',
         #'--eval',
         '--TransUnet-pretrained-path', './pretrained_ckpt/R50+ViT-B_16.npz',
         '--cfg', './configs/swin_tiny_patch4_window7_224_lite.yaml',
