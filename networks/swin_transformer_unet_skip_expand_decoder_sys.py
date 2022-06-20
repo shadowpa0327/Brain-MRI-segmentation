@@ -671,7 +671,7 @@ class SwinTransformerSys(nn.Module):
             print("---final upsample expand_first---")
             self.up = FinalPatchExpand_X4(input_resolution=(img_size//patch_size,img_size//patch_size),dim_scale=4,dim=embed_dim)
             self.output = nn.Conv2d(in_channels=embed_dim,out_channels=self.num_classes,kernel_size=1,bias=False)
-
+            self.final_act = nn.Sigmoid()
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -724,7 +724,6 @@ class SwinTransformerSys(nn.Module):
     def up_x4(self, x):
         H, W = self.patches_resolution
         B, L, C = x.shape
-        self.act = nn.Sigmoid()
         assert L == H*W, "input features has wrong size"
 
         if self.final_upsample=="expand_first":
@@ -733,7 +732,7 @@ class SwinTransformerSys(nn.Module):
             x = x.permute(0,3,1,2) #B,C,H,W
             x = self.output(x)
             if self.num_classes == 1:
-                x = self.act(x)
+                x = self.final_act(x)
         return x
 
     def forward(self, x):
