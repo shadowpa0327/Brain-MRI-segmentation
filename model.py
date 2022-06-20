@@ -2,7 +2,7 @@ import segmentation_models_pytorch as smp
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# from config import get_config
+from config import get_config
 from networks.vision_transformer import SwinUnet
 from networks.vit_seg_modeling import VisionTransformer as ViT_seg
 from networks.vit_seg_modeling import CONFIGS as CONFIGS_ViT_seg
@@ -89,7 +89,6 @@ class Unet(nn.Module):
         self.up3 = Up(256, 128//factor, bilinear)        
         self.up4 = Up(128, 64, bilinear)        
         self.outc = OutConv(64, n_classes)
-        self.output_act = nn.Sigmoid()
     def forward(self, x):
         x1 = self.inc(x)
         x2 = self.down1(x1)
@@ -101,8 +100,6 @@ class Unet(nn.Module):
         x = self.up3(x, x2)
         x = self.up4(x, x1)
         logits = self.outc(x)
-        if self.output_act:
-            logits = self.output_act(logits)
         return logits
 
 # [END]=================== Unet ==================
@@ -128,6 +125,7 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
                 raise ValueError("decoder channel of Unet should be a list")
             print(f"Build Unet with encoder {encoder}, pretrained weight:{encoder_weights}")
             if encoder == 'Unet': # using Unet original structure
+                print("Use original Unet")
                 model = Unet(n_channels=input_channels,n_classes=num_classes, output_activation=output_activation)
             else : # change Unet encoder
                 model = smp.Unet(encoder,in_channels=input_channels, 
@@ -162,7 +160,7 @@ def build_model(args = None, seg_struct = 'Unet', encoder = 'resnet50', decoder_
         return model
     elif is_swin: # using swin transformer
         config = get_config(args=args)
-        model = SwinUnet(config=config, img_size=224, num_classes=1).to('cuda')
+        model = SwinUnet(config=config, img_size=224, num_classes=num_classes).to('cuda')
         if args.use_pretrained:
             model.load_from(config)
         print(f"Creating model Swin-Unet, using pretrained:{args.use_pretrained}")
