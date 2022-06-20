@@ -6,7 +6,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from .path_util import pjoin
 
 def np2th(weights, conv=False):
     """Possibly convert HWIO to OIHW."""
